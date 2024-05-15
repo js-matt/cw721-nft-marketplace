@@ -37,10 +37,10 @@ cargo unit-test
 cargo alias: `wasm` & `test`
 
 ## src
-### /contract.rs
+### /contract
 This `contract.rs` file handles various functionalities related to NFT auctions in a smart contract. 
 
-***Execute Handlers***
+***/exec.rs***
 
 1. `handle_cw721_auction_start`
 - Handles the initialization of a CW721 token auction.
@@ -69,7 +69,7 @@ This `contract.rs` file handles various functionalities related to NFT auctions 
 - Transfers the bid amount to the auction owner.
 - Handles cases where there are no bids or the auction is already claimed.
 
-***Query Handlers***
+***/query.rs***
 
 1. `get_auction_details`
 - Fetches auction details based on optional filters such as token address and pagination parameters.
@@ -80,7 +80,7 @@ This `contract.rs` file handles various functionalities related to NFT auctions 
 3. `get_auction_state_by_id`
 - Fetches the state of an auction by its ID.
 
-***Helper Functions***
+***/helper.rs***
 1. `fetch_and_update_next_auction_id`
 - Fetches and increments the next auction ID in the storage.
 
@@ -109,10 +109,6 @@ This `contract.rs` file handles various functionalities related to NFT auctions 
 
 3. `query`
 - Handles queries to fetch auction details, bids, and auction states.
-
-***Test***
-
-- Unit test for this contract.
 
 ### /msg.rs
 1. `InstantiateMsg`
@@ -168,5 +164,19 @@ This `contract.rs` file handles various functionalities related to NFT auctions 
 ### /error.rs
 - This error.rs file defines custom error types for the CW721 NFT auction smart contract. It uses the thiserror crate to create descriptive and structured error messages. These custom errors help in handling and debugging various issues that can arise during the execution of the contract.
 
+### /testing/tests.rs
+- Unit test for the contract
+
 ## deploy_testnet.py
 - This Python script demonstrates how to deploy and instantiate a CW721 NFT marketplace contract on the Osmosis testnet using the cosmpy library.
+
+# Deploy
+## Prerequests
+- Python3
+- Osmosis testnet configuration
+- Gas fee
+
+## Command
+```
+python3 deploy_testnet.py
+```

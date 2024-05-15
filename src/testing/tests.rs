@@ -6,7 +6,10 @@ mod tests {
         mock::{custom_mock_dependencies, MOCK_TOKEN_ADDR, MOCK_TOKEN_OWNER, MOCK_UNCLAIMED_TOKEN},
         msg::Cw721CustomMsg,
         query,
-        state::{auction_details, AuctionDetails, NFTAuctionState, NFT_AUCTION_STATE},
+        state::{
+            get_bids, load_auction_details, load_nft_auction_state, read_auction_details,
+            save_auction_details, save_bids, AuctionDetails, Bid, NFTAuctionState, OrderBy,
+        },
         ExecuteMsg, InstantiateMsg, QueryMsg,
     };
     use cosmwasm_std::{
@@ -33,7 +36,7 @@ mod tests {
                 is_cancelled: false,
                 min_bid,
             },
-            NFT_AUCTION_STATE.load(deps.storage, 1u128).unwrap()
+            load_nft_auction_state(deps.storage, 1u128).unwrap()
         );
     }
 
@@ -130,12 +133,11 @@ mod tests {
                 token_address: MOCK_TOKEN_ADDR.to_owned(),
                 token_id: MOCK_UNCLAIMED_TOKEN.to_owned(),
             },
-            auction_details()
-                .load(
-                    &deps.storage,
-                    &(MOCK_UNCLAIMED_TOKEN.to_owned() + MOCK_TOKEN_ADDR)
-                )
-                .unwrap()
+            load_auction_details(
+                &mut deps.storage,
+                &(MOCK_UNCLAIMED_TOKEN.to_owned() + MOCK_TOKEN_ADDR)
+            )
+            .unwrap()
         );
     }
 
@@ -249,7 +251,7 @@ mod tests {
         let info = mock_info("sender", &coins(200, "usd".to_string()));
         let res = execute(deps.as_mut(), env, info, msg);
         assert_eq!(
-            ContractError::HighestBidderCannotOutBid {},
+            ContractError::HighestBidderCannotBeOutbid {},
             res.unwrap_err()
         );
     }
@@ -294,7 +296,7 @@ mod tests {
         env.block.time = Timestamp::from_seconds(150);
 
         let error = ContractError::InvalidFunds {
-            msg: "Auctions require exactly one coin to be sent.".to_string(),
+            msg: "Auctions require you to send exactly one coin".to_string(),
         };
         let msg = ExecuteMsg::SubmitBid {
             token_id: MOCK_UNCLAIMED_TOKEN.to_string(),
@@ -312,7 +314,7 @@ mod tests {
         assert_eq!(error, res.unwrap_err());
 
         let error = ContractError::InvalidFunds {
-            msg: "No usd assets are provided to auction".to_string(),
+            msg: "No usd assets are provided for the auction".to_string(),
         };
 
         // Invalid denom
@@ -350,13 +352,7 @@ mod tests {
         let info = mock_info(MOCK_TOKEN_ADDR, &[]);
         let res = execute(deps.as_mut(), env.clone(), info, msg);
 
-        assert_eq!(
-            ContractError::InvalidStartTime {
-                current_time: env.block.time.nanos() / 1000000,
-                current_block: env.block.height,
-            },
-            res.unwrap_err()
-        );
+        assert_eq!(ContractError::InvalidStartTime {}, res.unwrap_err());
     }
 
     #[test]
@@ -449,8 +445,7 @@ mod tests {
         );
 
         assert!(
-            NFT_AUCTION_STATE
-                .load(deps.as_ref().storage, 1u128)
+            load_nft_auction_state(deps.as_ref().storage, 1u128)
                 .unwrap()
                 .is_cancelled
         );
@@ -503,8 +498,7 @@ mod tests {
         );
 
         assert!(
-            NFT_AUCTION_STATE
-                .load(deps.as_ref().storage, 1u128)
+            load_nft_auction_state(deps.as_ref().storage, 1u128)
                 .unwrap()
                 .is_cancelled
         );
@@ -814,8 +808,6 @@ mod tests {
         );
     }
 
-    use cosmwasm_std::testing::mock_dependencies;
-
     #[test]
     fn test_get_bids_defaults() {
         let mut deps = mock_dependencies();
@@ -833,8 +825,7 @@ mod tests {
                 timestamp: Timestamp::from_seconds(1001),
             },
         ];
-        BIDS.save(&mut deps.storage, auction_id, &sample_bids)
-            .unwrap();
+        save_bids(&mut deps.storage, auction_id, sample_bids).unwrap();
 
         let result = get_bids(&deps.storage, auction_id, None, None, None).unwrap();
         assert_eq!(result.len(), 2); // Default limit is 20, so should show both bids
@@ -857,8 +848,7 @@ mod tests {
                 timestamp: Timestamp::from_seconds(1001),
             },
         ];
-        BIDS.save(&mut deps.storage, auction_id, &sample_bids)
-            .unwrap();
+        save_bids(&mut deps.storage, auction_id, sample_bids).unwrap();
 
         let result = get_bids(
             &deps.storage,
@@ -882,9 +872,12 @@ mod tests {
             token_address: "cosmos_token_address".to_string(),
             token_id: "cosmos_token_id".to_string(),
         };
-        auction_details()
-            .save(&mut deps.storage, "cosmos_token_address", &details)
-            .unwrap();
+        save_auction_details(
+            &mut deps.storage,
+            "cosmos_token_address".to_string(),
+            details,
+        )
+        .unwrap();
 
         let result = read_auction_details(&deps.storage, None, None, None).unwrap();
         assert_eq!(result.len(), 1);
@@ -901,9 +894,12 @@ mod tests {
             token_address: "specific_token_address".to_string(),
             token_id: "specific_token_id".to_string(),
         };
-        auction_details()
-            .save(&mut deps.storage, "specific_token_address", &details)
-            .unwrap();
+        save_auction_details(
+            &mut deps.storage,
+            "specific_token_address".to_string(),
+            details,
+        )
+        .unwrap();
 
         let result = read_auction_details(
             &deps.storage,

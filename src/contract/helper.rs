@@ -1,28 +1,28 @@
 use crate::{
     error::ContractError,
-    msg::Cw721CustomMsg,
     state::{
-        auction_details, get_bids, read_auction_details, AuctionDetails, Bid, NFTAuctionState,
-        OrderBy, BIDS, NEXT_AUCTION_ID, NFT_AUCTION_STATE,
+        auction_details, load_next_auction_id, load_nft_auction_state, save_next_auction_id,
+        NFTAuctionState,
     },
 };
 use cosmwasm_std::{
-    attr, coins, ensure, from_json, to_json_binary, Addr, BankMsg, BlockInfo, Coin, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, QuerierWrapper, QueryRequest, Response, Storage, Timestamp,
-    Uint128, WasmMsg, WasmQuery,
+    ensure, to_json_binary, BlockInfo, QuerierWrapper, QueryRequest, Storage, Timestamp, Uint128,
+    WasmQuery,
 };
-use cw721::{Cw721ExecuteMsg, Cw721QueryMsg, Cw721ReceiveMsg, Expiration, OwnerOfResponse};
+use cw721::{Cw721QueryMsg, Expiration, OwnerOfResponse};
 
-fn fetch_and_update_next_auction_id(storage: &mut dyn Storage) -> Result<Uint128, ContractError> {
-    let next_auction_id = NEXT_AUCTION_ID.load(storage)?;
+pub fn fetch_and_update_next_auction_id(
+    storage: &mut dyn Storage,
+) -> Result<Uint128, ContractError> {
+    let next_auction_id = load_next_auction_id(storage)?;
 
     let incremented_next_auction_id = next_auction_id.checked_add(Uint128::from(1u128))?;
-    NEXT_AUCTION_ID.save(storage, &incremented_next_auction_id)?;
+    save_next_auction_id(storage, incremented_next_auction_id)?;
 
     Ok(next_auction_id)
 }
 
-fn convert_milliseconds_to_expiration(time: u64) -> Result<Expiration, ContractError> {
+pub fn convert_milliseconds_to_expiration(time: u64) -> Result<Expiration, ContractError> {
     ensure!(
         time <= u64::MAX / 1000000,
         ContractError::InvalidExpiration {}
@@ -31,7 +31,7 @@ fn convert_milliseconds_to_expiration(time: u64) -> Result<Expiration, ContractE
     Ok(Expiration::AtTime(Timestamp::from_nanos(time * 1000000)))
 }
 
-fn set_expiration_from_block(block: &BlockInfo, model: Expiration) -> Option<Expiration> {
+pub fn set_expiration_from_block(block: &BlockInfo, model: Expiration) -> Option<Expiration> {
     match model {
         Expiration::AtTime(_) => Some(Expiration::AtTime(block.time)),
         Expiration::AtHeight(_) => Some(Expiration::AtHeight(block.height)),
@@ -39,7 +39,7 @@ fn set_expiration_from_block(block: &BlockInfo, model: Expiration) -> Option<Exp
     }
 }
 
-fn fetch_latest_auction_state_for_token(
+pub fn fetch_latest_auction_state_for_token(
     storage: &dyn Storage,
     token_id: &str,
     token_address: &str,
@@ -49,12 +49,12 @@ fn fetch_latest_auction_state_for_token(
         None => return Err(ContractError::AuctionDoesNotExist {}),
         Some(auction_info) => *auction_info.latest().unwrap(),
     };
-    let token_auction_state = NFT_AUCTION_STATE.load(storage, latest_auction_id.u128())?;
+    let token_auction_state = load_nft_auction_state(storage, latest_auction_id.u128())?;
 
     Ok(token_auction_state)
 }
 
-fn query_token_owner(
+pub fn query_token_owner(
     querier: QuerierWrapper,
     token_addr: String,
     token_id: String,

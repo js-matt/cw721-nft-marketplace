@@ -6,8 +6,8 @@ pub enum ContractError {
     #[error("Invalid funds: {msg}")]
     InvalidFunds { msg: String },
 
-    #[error("Highest bidder cannot out bid")]
-    HighestBidderCannotOutBid {},
+    #[error("Highest bidder cannot be outbid")]
+    HighestBidderCannotBeOutbid {},
 
     #[error("Bid smaller than highest bid")]
     BidSmallerThanHighestBid {},
@@ -26,11 +26,8 @@ pub enum ContractError {
     #[error("Invalid expiration")]
     InvalidExpiration {},
 
-    #[error("Invalid Start time. Current time: {current_time}. Current block: {current_block}")]
-    InvalidStartTime {
-        current_time: u64,
-        current_block: u64,
-    },
+    #[error("Invalid Start time.")]
+    InvalidStartTime {},
 
     #[error("Overflow")]
     Overflow {},

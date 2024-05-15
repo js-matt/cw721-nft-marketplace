@@ -1,49 +1,20 @@
 use crate::{
-    error::ContractError,
-    helper::{
+    contract::helper::{
         convert_milliseconds_to_expiration, fetch_and_update_next_auction_id,
         fetch_latest_auction_state_for_token, query_token_owner, set_expiration_from_block,
     },
+    error::ContractError,
     msg::Cw721CustomMsg,
     state::{
-        auction_details, get_bids, read_auction_details, AuctionDetails, Bid, NFTAuctionState,
-        OrderBy, BIDS, NEXT_AUCTION_ID, NFT_AUCTION_STATE,
+        load_auction_details, load_bids, save_auction_details, save_bids, save_nft_auction_state,
+        Bid, NFTAuctionState,
     },
 };
 use cosmwasm_std::{
-    attr, coins, ensure, from_json, to_json_binary, Addr, BankMsg, BlockInfo, Coin, CosmosMsg,
-    Deps, DepsMut, Env, MessageInfo, QuerierWrapper, QueryRequest, Response, Storage, Timestamp,
-    Uint128, WasmMsg, WasmQuery,
+    attr, coins, ensure, from_json, to_json_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env,
+    MessageInfo, Response, Uint128, WasmMsg,
 };
-use cw721::{Cw721ExecuteMsg, Cw721QueryMsg, Cw721ReceiveMsg, Expiration, OwnerOfResponse};
-
-#[entry_point]
-pub fn execute(
-  deps: DepsMut,
-  env: Env,
-  info: MessageInfo,
-  msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
-  use contract::{
-      cancel_auction_and_refund, finalize_auction_and_transfer_assets,
-      handle_cw721_auction_start, submit_bid_for_auction,
-  };
-  match msg {
-      ExecuteMsg::AuctionStart(msg) => handle_cw721_auction_start(deps, env, info, msg),
-      ExecuteMsg::SubmitBid {
-          token_id,
-          token_address,
-      } => submit_bid_for_auction(deps, env, info, token_id, token_address),
-      ExecuteMsg::CancelAuctionAndRefund {
-          token_id,
-          token_address,
-      } => cancel_auction_and_refund(deps, env, info, token_id, token_address),
-      ExecuteMsg::FinalizeAuctionAndTranferAssets {
-          token_id,
-          token_address,
-      } => finalize_auction_and_transfer_assets(deps, env, info, token_id, token_address),
-  }
-}
+use cw721::{Cw721ExecuteMsg, Cw721ReceiveMsg};
 
 pub fn handle_cw721_auction_start(
     deps: DepsMut,
@@ -94,31 +65,26 @@ fn initialize_cw721_token_auction(
     let block_time = set_expiration_from_block(&env.block, start_expiration).unwrap();
     ensure!(
         start_expiration.gt(&block_time),
-        ContractError::InvalidStartTime {
-            current_time: env.block.time.nanos() / 1000000,
-            current_block: env.block.height,
-        }
+        ContractError::InvalidStartTime {}
     );
 
     let auction_id = fetch_and_update_next_auction_id(deps.storage)?;
     let pk = token_id.to_owned() + &token_address;
 
-    let mut auction_info = auction_details()
-        .load(deps.storage, &pk)
-        .unwrap_or_default();
+    let mut auction_info = load_auction_details(deps.storage, &pk).unwrap_or_default();
     auction_info.push(auction_id);
     if auction_info.token_address.is_empty() {
         auction_info.token_address = token_address.to_owned();
         auction_info.token_id = token_id.to_owned();
     }
-    auction_details().save(deps.storage, &pk, &auction_info)?;
 
-    BIDS.save(deps.storage, auction_id.u128(), &vec![])?;
+    save_auction_details(deps.storage, pk, auction_info)?;
+    save_bids(deps.storage, auction_id.u128(), vec![])?;
 
-    NFT_AUCTION_STATE.save(
+    save_nft_auction_state(
         deps.storage,
         auction_id.u128(),
-        &NFTAuctionState {
+        NFTAuctionState {
             start: start_expiration,
             end: end_expiration,
             high_bidder_addr: Addr::unchecked(""),
@@ -173,13 +139,13 @@ pub fn submit_bid_for_auction(
     ensure!(
         info.funds.len() == 1,
         ContractError::InvalidFunds {
-            msg: "Auctions require exactly one coin to be sent.".to_string(),
+            msg: "Auctions require you to send exactly one coin".to_string(),
         }
     );
 
     ensure!(
         token_auction_state.high_bidder_addr != info.sender,
-        ContractError::HighestBidderCannotOutBid {}
+        ContractError::HighestBidderCannotBeOutbid {}
     );
 
     let coin_denomination = token_auction_state.coin_denomination.clone();
@@ -187,7 +153,10 @@ pub fn submit_bid_for_auction(
     ensure!(
         payment.denom == coin_denomination && payment.amount > Uint128::zero(),
         ContractError::InvalidFunds {
-            msg: format!("No {} assets are provided to auction", coin_denomination),
+            msg: format!(
+                "No {} assets are provided for the auction",
+                coin_denomination
+            ),
         }
     );
     ensure!(
@@ -212,14 +181,14 @@ pub fn submit_bid_for_auction(
     token_auction_state.high_bidder_amount = payment.amount;
 
     let key = token_auction_state.auction_id.u128();
-    NFT_AUCTION_STATE.save(deps.storage, key.clone(), &token_auction_state)?;
-    let mut bids_for_auction = BIDS.load(deps.storage, key.clone())?;
+    save_nft_auction_state(deps.storage, key.clone(), token_auction_state)?;
+    let mut bids_for_auction = load_bids(deps.storage, key.clone())?;
     bids_for_auction.push(Bid {
         bidder: info.sender.to_string(),
         amount: payment.amount,
         timestamp: env.block.time,
     });
-    BIDS.save(deps.storage, key, &bids_for_auction)?;
+    save_bids(deps.storage, key, bids_for_auction)?;
     Ok(Response::new().add_messages(messages).add_attributes(vec![
         attr("action", "bid"),
         attr("token_id", token_id),
@@ -266,10 +235,10 @@ pub fn cancel_auction_and_refund(
     }
 
     token_auction_state.is_cancelled = true;
-    NFT_AUCTION_STATE.save(
+    save_nft_auction_state(
         deps.storage,
         token_auction_state.auction_id.u128(),
-        &token_auction_state,
+        token_auction_state,
     )?;
 
     Ok(Response::new().add_messages(messages))
