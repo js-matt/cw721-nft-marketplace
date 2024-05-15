@@ -7,8 +7,10 @@ mod tests {
         msg::Cw721CustomMsg,
         query,
         state::{
-            get_bids, load_auction_details, load_nft_auction_state, read_auction_details,
-            save_auction_details, save_bids, AuctionDetails, Bid, NFTAuctionState, OrderBy,
+            get_bids, load_auction_details, load_bids, load_next_auction_id,
+            load_nft_auction_state, read_auction_details, save_auction_details, save_bids,
+            save_next_auction_id, save_nft_auction_state, AuctionDetails, Bid, NFTAuctionState,
+            OrderBy,
         },
         ExecuteMsg, InstantiateMsg, QueryMsg,
     };
@@ -20,6 +22,76 @@ mod tests {
     };
 
     use cw721::{Cw721ExecuteMsg, Cw721ReceiveMsg, Expiration};
+
+    #[test]
+    fn test_save_and_load_bids() {
+        let mut deps = mock_dependencies();
+        let auction_id = 1u128;
+        let bids = vec![
+            Bid {
+                bidder: "Alice".to_string(),
+                amount: Uint128::new(100),
+                timestamp: Timestamp::from_seconds(1622540000),
+            },
+            Bid {
+                bidder: "Bob".to_string(),
+                amount: Uint128::new(150),
+                timestamp: Timestamp::from_seconds(1622540100),
+            },
+        ];
+
+        save_bids(&mut deps.storage, auction_id, bids.clone()).unwrap();
+        let loaded_bids = load_bids(&deps.storage, auction_id).unwrap();
+        assert_eq!(loaded_bids, bids);
+    }
+
+    #[test]
+    fn test_save_and_load_nft_auction_state() {
+        let mut deps = mock_dependencies();
+        let auction_id = 1u128;
+        let auction_state = NFTAuctionState {
+            start: Expiration::AtHeight(100),
+            end: Expiration::AtHeight(200),
+            high_bidder_addr: Addr::unchecked("high_bidder"),
+            high_bidder_amount: Uint128::new(100),
+            coin_denomination: "uusd".to_string(),
+            auction_id: Uint128::new(1),
+            min_bid: Some(Uint128::new(50)),
+            owner: "owner".to_string(),
+            token_id: "token1".to_string(),
+            token_address: "token_address".to_string(),
+            is_cancelled: false,
+        };
+
+        save_nft_auction_state(&mut deps.storage, auction_id, auction_state.clone()).unwrap();
+        let loaded_auction_state = load_nft_auction_state(&deps.storage, auction_id).unwrap();
+        assert_eq!(loaded_auction_state, auction_state);
+    }
+
+    #[test]
+    fn test_save_and_load_next_auction_id() {
+        let mut deps = mock_dependencies();
+        let next_auction_id = Uint128::new(2);
+
+        save_next_auction_id(&mut deps.storage, next_auction_id).unwrap();
+        let loaded_next_auction_id = load_next_auction_id(&deps.storage).unwrap();
+        assert_eq!(loaded_next_auction_id, next_auction_id);
+    }
+
+    #[test]
+    fn test_save_and_load_auction_details() {
+        let mut deps = mock_dependencies();
+        let pk = "auction1".to_string();
+        let details = AuctionDetails {
+            auction_ids: vec![Uint128::new(1), Uint128::new(2)],
+            token_address: "token_address".to_string(),
+            token_id: "token1".to_string(),
+        };
+
+        save_auction_details(&mut deps.storage, pk.clone(), details.clone()).unwrap();
+        let loaded_details = load_auction_details(&mut deps.storage, &pk).unwrap();
+        assert_eq!(loaded_details, details);
+    }
 
     fn check_auction_created(deps: Deps, min_bid: Option<Uint128>) {
         assert_eq!(
