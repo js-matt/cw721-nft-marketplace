@@ -23,8 +23,8 @@ pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Invalid expiration")]
-    InvalidExpiration {},
+    #[error("Invalid time")]
+    InValidTime {},
 
     #[error("Invalid Start time.")]
     InvalidStartTime {},

@@ -5,11 +5,8 @@ use crate::{
         NFTAuctionState,
     },
 };
-use cosmwasm_std::{
-    ensure, to_json_binary, BlockInfo, QuerierWrapper, QueryRequest, Storage, Timestamp, Uint128,
-    WasmQuery,
-};
-use cw721::{Cw721QueryMsg, Expiration, OwnerOfResponse};
+use cosmwasm_std::{to_json_binary, QuerierWrapper, QueryRequest, Storage, Uint128, WasmQuery};
+use cw721::{Cw721QueryMsg, OwnerOfResponse};
 
 pub fn fetch_and_update_next_auction_id(
     storage: &mut dyn Storage,
@@ -20,23 +17,6 @@ pub fn fetch_and_update_next_auction_id(
     save_next_auction_id(storage, incremented_next_auction_id)?;
 
     Ok(next_auction_id)
-}
-
-pub fn convert_milliseconds_to_expiration(time: u64) -> Result<Expiration, ContractError> {
-    ensure!(
-        time <= u64::MAX / 1000000,
-        ContractError::InvalidExpiration {}
-    );
-
-    Ok(Expiration::AtTime(Timestamp::from_nanos(time * 1000000)))
-}
-
-pub fn set_expiration_from_block(block: &BlockInfo, model: Expiration) -> Option<Expiration> {
-    match model {
-        Expiration::AtTime(_) => Some(Expiration::AtTime(block.time)),
-        Expiration::AtHeight(_) => Some(Expiration::AtHeight(block.height)),
-        Expiration::Never {} => None,
-    }
 }
 
 pub fn fetch_latest_auction_state_for_token(

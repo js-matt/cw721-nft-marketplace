@@ -84,16 +84,13 @@ This `contract.rs` file handles various functionalities related to NFT auctions 
 1. `fetch_and_update_next_auction_id`
 - Fetches and increments the next auction ID in the storage.
 
-2. `convert_milliseconds_to_expiration`
-- Converts a timestamp in milliseconds to an Expiration type.
-
-3. `set_expiration_from_block`
+2. `set_expiration_from_block`
 - Sets expiration time based on the current block information.
 
-4. `fetch_latest_auction_state_for_token`
+3. `fetch_latest_auction_state_for_token`
 - Fetches the latest auction state for a specific token.
 
-5. `query_token_owner`
+4. `query_token_owner`
 - Queries the owner of a specific token using the CW721 contract.
 
 ### /lib.rs

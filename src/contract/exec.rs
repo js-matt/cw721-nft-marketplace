@@ -1,7 +1,6 @@
 use crate::{
     contract::helper::{
-        convert_milliseconds_to_expiration, fetch_and_update_next_auction_id,
-        fetch_latest_auction_state_for_token, query_token_owner, set_expiration_from_block,
+        fetch_and_update_next_auction_id, fetch_latest_auction_state_for_token, query_token_owner,
     },
     error::ContractError,
     msg::Cw721CustomMsg,
@@ -12,7 +11,7 @@ use crate::{
 };
 use cosmwasm_std::{
     attr, coins, ensure, from_json, to_json_binary, Addr, BankMsg, Coin, CosmosMsg, DepsMut, Env,
-    MessageInfo, Response, Uint128, WasmMsg,
+    MessageInfo, Response, Timestamp, Uint128, WasmMsg,
 };
 use cw721::{Cw721ExecuteMsg, Cw721ReceiveMsg};
 
@@ -56,15 +55,13 @@ fn initialize_cw721_token_auction(
 ) -> Result<Response, ContractError> {
     ensure!(
         start_time > 0 && duration > 0,
-        ContractError::InvalidExpiration {}
+        ContractError::InValidTime {}
     );
+    let end_timestamp = Timestamp::from_seconds(start_time + duration);
+    let start_timestamp = Timestamp::from_seconds(start_time);
 
-    let start_expiration = convert_milliseconds_to_expiration(start_time)?;
-    let end_expiration = convert_milliseconds_to_expiration(start_time + duration)?;
-
-    let block_time = set_expiration_from_block(&env.block, start_expiration).unwrap();
     ensure!(
-        start_expiration.gt(&block_time),
+        start_timestamp.gt(&env.block.time),
         ContractError::InvalidStartTime {}
     );
 
@@ -85,8 +82,8 @@ fn initialize_cw721_token_auction(
         deps.storage,
         auction_id.u128(),
         NFTAuctionState {
-            start: start_expiration,
-            end: end_expiration,
+            start: start_timestamp,
+            end: end_timestamp,
             high_bidder_addr: Addr::unchecked(""),
             high_bidder_amount: Uint128::zero(),
             coin_denomination: coin_denomination.clone(),
@@ -100,8 +97,8 @@ fn initialize_cw721_token_auction(
     )?;
     Ok(Response::new().add_attributes(vec![
         attr("action", "start_auction"),
-        attr("start_time", start_expiration.to_string()),
-        attr("end_time", end_expiration.to_string()),
+        attr("start_time", start_timestamp.to_string()),
+        attr("end_time", end_timestamp.to_string()),
         attr("coin_denomination", coin_denomination),
         attr("auction_id", auction_id.to_string()),
     ]))
@@ -123,11 +120,11 @@ pub fn submit_bid_for_auction(
     );
 
     ensure!(
-        token_auction_state.start.is_expired(&env.block),
+        token_auction_state.start.gt(&env.block.time),
         ContractError::AuctionNotStarted {}
     );
     ensure!(
-        !token_auction_state.end.is_expired(&env.block),
+        !token_auction_state.end.ge(&env.block.time),
         ContractError::AuctionEnded {}
     );
 
@@ -211,7 +208,7 @@ pub fn cancel_auction_and_refund(
         ContractError::Unauthorized {}
     );
     ensure!(
-        !token_auction_state.end.is_expired(&env.block),
+        !token_auction_state.end.gt(&env.block.time),
         ContractError::AuctionEnded {}
     );
     let mut messages: Vec<CosmosMsg> = vec![CosmosMsg::Wasm(WasmMsg::Execute {
@@ -254,7 +251,7 @@ pub fn finalize_auction_and_transfer_assets(
     let token_auction_state =
         fetch_latest_auction_state_for_token(deps.storage, &token_id, &token_address)?;
     ensure!(
-        token_auction_state.end.is_expired(&env.block),
+        token_auction_state.end.gt(&env.block.time),
         ContractError::AuctionNotEnded {}
     );
     let token_owner = query_token_owner(

@@ -1,7 +1,6 @@
 use crate::ContractError;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Order, StdResult, Storage, Timestamp, Uint128};
-use cw721::Expiration;
 use cw_storage_plus::{Bound, Index, IndexList, IndexedMap, Item, Map, MultiIndex};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -12,8 +11,8 @@ const DEFAULT_LIMIT: u64 = 20;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct NFTAuctionState {
-    pub start: Expiration,
-    pub end: Expiration,
+    pub start: Timestamp,
+    pub end: Timestamp,
     pub high_bidder_addr: Addr,
     pub high_bidder_amount: Uint128,
     pub coin_denomination: String,
